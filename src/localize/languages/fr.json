@@ -1,0 +1,13 @@
+{
+  "common": {
+    "version": "Version",
+    "invalid_configuration": "Configuration invalide",
+    "show_warning": "Afficher un Avertissement",
+    "show_error": "Afficher l'erreur"
+  },
+  "greetings": {
+    "morning": "Bonjour",
+    "afternoon": "Bon après-midi",
+    "evening": "Bonsoir"
+  }
+}

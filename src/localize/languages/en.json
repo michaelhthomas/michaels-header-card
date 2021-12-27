@@ -4,5 +4,10 @@
     "invalid_configuration": "Invalid configuration",
     "show_warning": "Show Warning",
     "show_error": "Show Error"
+  },
+  "greetings": {
+    "morning": "Good Morning",
+    "afternoon": "Good Afternoon",
+    "evening": "Good Evening"
   }
 }

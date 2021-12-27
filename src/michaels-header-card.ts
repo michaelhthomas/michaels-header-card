@@ -11,19 +11,18 @@ import { customElement, property, state } from "lit/decorators";
 import {
   HomeAssistant,
   hasConfigOrEntityChanged,
-  hasAction,
-  ActionHandlerEvent,
-  handleAction
+  createThing
 } from 'custom-card-helpers';
 
-import type { MichaelsHeaderCardConfig } from './types';
-import { actionHandler } from './action-handler-directive';
-import { CARD_VERSION } from './const';
+import type { MichaelsHeaderCardConfig, Quote } from './types';
+import { version } from '../package.json';
 import { localize } from './localize/localize';
+import getMessage from './helpers/getMessage';
+import getQuote from './helpers/getQuote';
 
 /* eslint no-console: 0 */
 console.info(
-  `%c  MICHAELS-HEADER-CARD \n%c  ${localize('common.version')} ${CARD_VERSION}    `,
+  `%c  MICHAELS-HEADER-CARD  \n%c     ${localize('common.version')} ${version}      `,
   'color: orange; font-weight: bold; background: black',
   'color: white; font-weight: bold; background: dimgray',
 );
@@ -35,7 +34,14 @@ export class MichaelsHeaderCard extends LitElement {
   // https://lit.dev/docs/components/properties/
   @property({ attribute: false }) public hass!: HomeAssistant;
 
+  @state() private quote!: Quote;
+
   @state() private config!: MichaelsHeaderCardConfig;
+
+  constructor() {
+    super();
+    this.fetchQuote();
+  }
 
   // https://lit.dev/docs/components/properties/#accessors-custom
   public setConfig(config: MichaelsHeaderCardConfig): void {
@@ -56,38 +62,90 @@ export class MichaelsHeaderCard extends LitElement {
       return false;
     }
 
-    return hasConfigOrEntityChanged(this, changedProps, false);
+    return hasConfigOrEntityChanged(this, changedProps, false) || changedProps.has('quote');
+  }
+
+  protected renderWeatherCard(): any {
+    const weatherCard = createThing({
+      "type": "custom:simple-weather-card",
+      "entity": this.config.weather_entity,
+      "backdrop": true
+    });
+
+    weatherCard.hass = this.hass;
+
+    return weatherCard;
+  }
+
+  protected renderPerson(): any {
+
+    const trackerArray: Array<string> = [];
+
+    this.config.people.forEach(person => {
+      trackerArray.push(person.track)
+    });
+
+    const personCard = createThing({
+      "type": "entities",
+      "entities": trackerArray
+    });
+
+    personCard.hass = this.hass;
+
+    return personCard;
+  }
+
+  protected async fetchQuote(): Promise<void> {
+    console.log("Fetching quote...")
+    const quote = await getQuote();
+    this.quote = quote;
   }
 
   // https://lit.dev/docs/components/rendering/
   protected render(): TemplateResult | void {
     // TODO Check for stateObj or other necessary things and render a warning if missing
     if (this.config.show_warning) {
-      return this._showWarning(localize('common.show_warning'));
+      return this._showWarning(localize('common.show_warning') + JSON.stringify(this.config.people));
     }
 
-    if (this.config.show_error) {
-      return this._showError(localize('common.show_error'));
+    // Error if config is invalid
+    if (!(this.config.weather_entity && this.config.people)) {
+      return this._showError(localize('common.invalid_configuration'));
     }
 
     return html`
-      <ha-card
-        .header=${this.config.name}
-        @action=${this._handleAction}
-        .actionHandler=${actionHandler({
-          hasHold: hasAction(this.config.hold_action),
-          hasDoubleClick: hasAction(this.config.double_tap_action),
-        })}
-        tabindex="0"
-        .label=${`Boilerplate: ${this.config.entity || 'No Entity Defined'}`}
-      ></ha-card>
-    `;
-  }
+      <ha-card>
+        <div class="container">
+          <div class="title">
+            <h1 class="title-message">
+              ${ getMessage(this.hass) }
+            </h1>
+            ${ this.quote
+              ? html`
+              <h2 class="subtitle-message">
+                <p>
+                  ${ this.quote.content }
+                </p>
+                <p class="right">— ${ this.quote.author }</p>
+              </h2>
+              `
+              : html`
+              <p>Loading...</p>
+              `
+            }
+            
+          </div>
 
-  private _handleAction(ev: ActionHandlerEvent): void {
-    if (this.hass && this.config && ev.detail.action) {
-      handleAction(this, this.hass, this.config, ev.detail.action);
-    }
+          <div class="weather">
+            ${ this.renderWeatherCard() }
+          </div>
+
+          <div class="people">
+            ${ this.renderPerson() }
+          </div>
+        </div>
+      </ha-card>
+    `;
   }
 
   private _showWarning(warning: string): TemplateResult {
@@ -111,6 +169,49 @@ export class MichaelsHeaderCard extends LitElement {
 
   // https://lit.dev/docs/components/styles/
   static get styles(): CSSResultGroup {
-    return css``;
+    return css`
+      ha-card {
+        border-radius: 0;
+        padding: 10px;
+        margin-bottom: 2em;
+      }
+
+      .container {
+        max-width: 1500px;
+        margin: 0 auto;
+        overflow: auto;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        grid-gap: 1rem;
+      }
+
+      .title {
+        padding: 0 16px;
+      }
+
+      .title .title-message {
+        font-size: 2.5em;
+        line-height: 1em;
+      }
+
+      .title .subtitle-message {
+        font-size: 1.5em;
+        line-height: 1.5em;
+        font-weight: normal;
+        opacity: 0.8;
+      }
+
+      .subtitle-message p {
+        margin: 0;
+      }
+
+      .subtitle-message p.right {
+        float: right;
+      }
+
+      .weather {
+        margin-top: 16px;
+      }
+    `;
   }
 }
